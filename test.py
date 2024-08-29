@@ -22,6 +22,16 @@ def check_msg(msg_id: str):
     click.echo(candidate_md)
 
 
+def fwd_msg(msg_id: str, addresses: list):
+    inbox = gmail.GmailInbox()
+    inbox.fwd_msg(msg_id, addresses)
+
+
+def list_msg():
+    inbox = gmail.GmailInbox()
+    inbox.list_msg(subject='104應徵履歷 OR 透過104轉寄履歷', offset_days=0, label_ids='Label_6866544674998790970')
+
+
 if __name__ == '__main__':
     # msg_id = '18fb8942e2590167'
     # msg_id = '19154932940d00a3'  # 轉寄履歷(完整)
@@ -31,4 +41,6 @@ if __name__ == '__main__':
     # msg = gml.get_msg_by_id(msg_id=msg_id)
     # gml.list_msg('104應徵履歷 OR 透過104轉寄履歷')
 
-    check_msg(msg_id)
+    # check_msg(msg_id)
+    # fwd_msg(msg_id, ['lee.shiueh@gmail.com'])
+    list_msg()

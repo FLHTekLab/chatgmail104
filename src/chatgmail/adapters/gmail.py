@@ -2,18 +2,22 @@ import abc
 import base64
 import os.path
 import logging
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from datetime import datetime
 from chatgmail.config import get_gcp_credentials_file
 
 logger = logging.getLogger(__name__)
 # If modifying these scopes, delete the file token.json.
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+SCOPES = ['https://www.googleapis.com/auth/gmail.readonly',
+          'https://www.googleapis.com/auth/gmail.send',
+          'https://www.googleapis.com/auth/gmail.modify',
+          'https://www.googleapis.com/auth/gmail.compose']
 
 
 def read_msg_from_cache(msg_id: str) -> str:
@@ -84,11 +88,60 @@ class GmailInbox(MailInbox):
         logger.debug(f'Gmail label IDs: {labels}')
         return labels
 
+    def fwd_msg(self, msg_id: str, addresses: list):
+        service = self._build_gmail_service()
+
+        # 取得指定郵件內容
+        message = service.users().messages().get(userId="me", id=msg_id, format='full').execute()
+        headers = {header['name']: header['value'] for header in message['payload']['headers']}
+        subject = headers.get('Subject', 'No Subject')
+
+        # 取得郵件主體
+        body_html = base64.urlsafe_b64decode(message['payload']['body']['data']).decode('utf-8')
+
+        # 建立新的郵件
+        new_subject = f"Fwd: {subject}"
+        new_body_html = f"---------- Forwarded message ---------<br>{body_html}"
+        email_message = MIMEMultipart('alternative')
+        email_message['Subject'] = new_subject
+        email_message['From'] = "me"
+        email_message['To'] = ', '.join(addresses)
+
+        # 增加 HTML 內容
+        email_message.attach(MIMEText(new_body_html, 'html'))
+
+        # 編碼郵件
+        encoded_message = base64.urlsafe_b64encode(email_message.as_bytes()).decode()
+        create_message = {'raw': encoded_message}
+
+        # 發送郵件
+        send_message = service.users().messages().send(userId="me", body=create_message).execute()
+        print(f'Message Id: {send_message["id"]}')
+
+        logger.debug(f'Message({msg_id}) has been forwarded FWD Message ({send_message["id"]})')
+        return send_message["id"]
+
+    @staticmethod
+    def _convert_to_pst_seconds(year, month, day):
+        """依據台灣時區時間來轉換成timestamp"""
+        # 台灣時間是 UTC+8
+        taiwan_time = datetime(year, month, day, tzinfo=timezone(timedelta(hours=8)))
+        # pst_time = taiwan_time.astimezone(timezone(timedelta(hours=-8)))
+
+        # 取得該日期的開始時間（午夜）
+        start_time = int(taiwan_time.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        # 取得該日期的結束時間（午夜下一天）
+        end_time = int((taiwan_time + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+        return start_time, end_time
+
     def list_msg(self, subject, offset_days=7, label_ids='INBOX'):
         """List the user's Gmail Inbox messages with the specified subject and offset days."""
         _gmail_query_labels = label_ids
         service = self._build_gmail_service()
-        query = f'after:{(date.today() - timedelta(days=offset_days)).strftime("%Y/%m/%d")}'
+        _date = date.today() - timedelta(days=offset_days)
+        # query = f'after:{(date.today() - timedelta(days=offset_days)).strftime("%Y/%m/%d")}'
+        _start_time, _ = self._convert_to_pst_seconds(_date.year, _date.month, _date.day)
+        query = f'after:{_start_time}'
         if subject.strip():
             query = f'subject:("{subject}") AND {query}'
         logger.debug(f'Gmail Inbox query with {query}')

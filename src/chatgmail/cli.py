@@ -12,7 +12,7 @@ GMAIL_MSG_FOLDER = os.getenv('GMAIL_MSG_FOLDER', '.gmail')
 PROCESSED_MSG_FOLDER = os.getenv('GMAIL_MSG_FOLDER', '.processed')
 DIGEST_MSG_FOLDER = os.getenv('GMAIL_MSG_FOLDER', '.mdigest')
 DIGEST2_MSG_FOLDER = os.getenv('GMAIL_MSG_FOLDER', '.m2digest')
-MSG_QUERY_SUBJECT = os.getenv('MSG_QUERY_SUBJECT', '104應徵履歷 OR 透過104轉寄履歷')
+MSG_QUERY_SUBJECT = os.getenv('MSG_QUERY_SUBJECT', '')
 MSG_QUERY_DAYS = os.getenv('MSG_QUERY_DAYS', 1)
 MSG_QUERY_LABELS = os.getenv('MSG_QUERY_LABELS', 'INBOX')
 MSG_QUERY_CACHE_FILE = '.q'
@@ -62,7 +62,19 @@ def list_gmail_subject_msgs(query_subject, query_offset_days, gmail_label_ids):
     click.echo(
         f'Listing Gmail messages with sub: {query_subject} and days: {query_offset_days}, labels: {gmail_label_ids}...')
     gmail_inbox = gmail.GmailInbox()
-    msgs = gmail_inbox.list_msg(subject=query_subject, offset_days=query_offset_days, label_ids=gmail_label_ids)
+    labels = gmail_inbox.list_labels()
+    _ids = set()
+    for _id in f'{gmail_label_ids}'.split(','):
+        _ids.add(next((label.get('id') for label in labels if label.get('id') == _id), None))
+    for _id in f'{gmail_label_ids}'.split(','):
+        _ids.add(next((label.get('id') for label in labels if label.get('name') == _id), None))
+
+    # 移除 None 元素
+    _elements = {_e for _e in _ids if _e is not None}
+    _ids = ','.join(map(str, _elements))
+
+    # click.echo(f'{_ids}')
+    msgs = gmail_inbox.list_msg(subject=query_subject, offset_days=query_offset_days, label_ids=_ids)
     with open(MSG_QUERY_CACHE_FILE, 'w') as fh:
         fh.write(json.dumps(msgs, indent=2, ensure_ascii=False))
     if msgs:
@@ -171,11 +183,11 @@ def nav_q_msgs():
         choice = click.prompt('cmd ?', type=str)
 
         if choice == 'n':
-            _n = 0 if _n+1 >= len(_q) else _n+1
+            _n = 0 if _n + 1 >= len(_q) else _n + 1
             msg_id, _, _, _ = _q[_n]
             _print_candidate_digest(msg_id)
         elif choice == 'p':
-            _n = len(_q)-1 if _n-1 < 0 else _n-1
+            _n = len(_q) - 1 if _n - 1 < 0 else _n - 1
             msg_id, _, _, _ = _q[_n]
             _print_candidate_digest(msg_id)
         elif choice == 'd':
@@ -198,10 +210,21 @@ def nav_q_msgs():
             pass
 
 
+@click.command('fwd')
+@click.argument('msg_id')
+@click.argument('addresses')
+def fwd_gmail_msg(msg_id, addresses):
+    """Forward a Gmail message to specified email addresses."""
+    gmail_inbox = gmail.GmailInbox()
+    fwd_msg_id = gmail_inbox.fwd_msg(msg_id, f'{addresses}'.split(','))
+    click.echo(f'msg_id {msg_id} forward to {addresses}, {fwd_msg_id}')
+
+
 # Adding commands to the group
 chatgmailcli.add_command(list_gmail_labels)
 chatgmailcli.add_command(list_gmail_subject_msgs)
 chatgmailcli.add_command(nav_q_msgs)
+chatgmailcli.add_command(fwd_gmail_msg)
 chatgmailcli.add_command(check_gmail_msg)
 chatgmailcli.add_command(check_gmail_msg_all)
 
