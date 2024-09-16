@@ -1,10 +1,37 @@
 import os
 import dotenv
+import llm
 
 dotenv.load_dotenv()
 
 
-def get_gcp_credentials_file():
+# def get_llm_sys_prompt_from_file() -> str:
+#     _file = os.getenv('LLM_SYSTEM_PROMPT', '.prompt')
+#     if not os.path.exists(_file):
+#         raise FileExistsError(f'LLM_SYSTEM_PROMPT file not exist')
+#
+#     with open(_file, 'r') as fh:
+#         _prompt = fh.read()
+#     return _prompt
+
+
+def get_llm_model() -> llm.models:
+    model = llm.get_model(os.getenv('LLM_MODEL_NAME', '4o-mini'))
+    model_key = os.getenv('LLM_MODEL_API_KEY')
+    if model_key:
+        model.key = model_key
+    return model
+
+
+def get_gmail_msg_transfer_folder() -> str:
+    return os.getenv('GMAIL_MSG_TRANSFER_FOLDER', '.markdown')
+
+
+def get_gmail_msg_saved_folder() -> str:
+    return os.getenv('GMAIL_MSG_SAVED_FOLDER', '.gmail')
+
+
+def get_gcp_credentials_file() -> str:
     """GCP project OAuth client desktop app credentials file."""
     return os.getenv('GCP_CREDENTIALS_FILE', 'credentials.json')
 
@@ -36,7 +63,7 @@ logging_config = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "standard",
-            "level": "INFO",
+            "level": "DEBUG",
             "stream": "ext://sys.stdout"
         },
         "default": {
@@ -52,13 +79,18 @@ logging_config = {
         "handlers": ["console"],
     },
     "loggers": {
-        "chatgmail.entrypoints.cli": {
+        "chatgmail.cli": {
             "handlers": ["console", "default"],
-            "level": "DEBUG",
+            "level": "INFO",
             "propagate": False
         },
         "chatgmail": {
             "handlers": ["console", "default"],
+            "level": "INFO",
+            "propagate": False
+        },
+        "py_hr_agentic": {
+            "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False
         },

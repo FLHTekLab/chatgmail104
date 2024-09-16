@@ -133,8 +133,10 @@ credentials.json
 token.json
 .gmail/
 .processed/
-.mdigest/
+.markdown/
+.llm/
 .q
+.m
 .candidates
 *.log.*
 .DS_Store
